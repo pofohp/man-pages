@@ -1,0 +1,54 @@
+name: Update Bash Builtin Help Docs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 1 * *'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cleanup old data
+        run: rm -rf builtin
+
+      - name: Generate Bash Builtin Docs
+        shell: bash
+        run: |
+          set +e
+          mkdir -p builtin
+          for cmd in $(compgen -b) $(compgen -k); do
+            if [ "$cmd" = "." ]; then
+              filename="-."
+            else
+              filename="$cmd"
+            fi
+            help "$cmd" > "builtin/$filename" 2>/dev/null
+            if [ ! -s "builtin/$filename" ]; then
+              rm -f "builtin/$filename"
+            fi
+          done
+          set -e
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add builtin/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update bash builtin help docs"
+            git pull --rebase origin main
+            git push origin main
+          fi
